@@ -58,35 +58,79 @@ function isWeekday(dateStr) {
   return day >= 1 && day <= 5; // Mon..Fri
 }
 
-async function fetchTimeSeriesDaily(symbol) {
-  const url = `${BASE_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${API_KEY}`;
+async function symbolSearch(keyword) {
+  const url = `${BASE_URL}?function=SYMBOL_SEARCH&keywords=${encodeURIComponent(keyword)}&apikey=${API_KEY}`;
   const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) {
-    throw new Error('Network error fetching data');
-  }
+  if (!res.ok) throw new Error('Network error during symbol search');
   const data = await res.json();
-
   if (data.Note) {
     throw new Error('Rate limit reached. Please wait a minute and try again.');
   }
-  if (data['Error Message']) {
-    throw new Error('Invalid ticker symbol. Please try another.');
-  }
-  const series = data['Time Series (Daily)'];
-  if (!series || typeof series !== 'object') {
-    throw new Error('Data not available for this ticker.');
-  }
+  const matches = Array.isArray(data?.bestMatches) ? data.bestMatches : [];
+  return matches.map(m => ({
+    symbol: m['1. symbol'],
+    name: m['2. name'],
+    region: m['4. region'],
+    currency: m['8. currency']
+  }));
+}
 
+function parseDailySeries(json) {
+  const series = json['Time Series (Daily)'];
+  if (!series || typeof series !== 'object') return null;
   const closeByDate = {};
-  const dates = Object.keys(series);
-  for (const date of dates) {
-    const closeStr = series[date]['4. close'] || series[date]['5. adjusted close'];
+  for (const date of Object.keys(series)) {
+    // Prefer adjusted close if present, else close
+    const adjusted = series[date]['5. adjusted close'];
+    const closeStr = adjusted !== undefined ? adjusted : series[date]['4. close'];
     const close = Number(closeStr);
     if (!Number.isFinite(close)) continue;
     closeByDate[date] = close;
   }
   const datesAsc = Object.keys(closeByDate).sort((a, b) => new Date(a) - new Date(b));
+  if (datesAsc.length === 0) return null;
   return { datesAsc, closeByDate };
+}
+
+async function fetchTimeSeriesDaily(symbol) {
+  // Try adjusted first
+  const urlAdjusted = `${BASE_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${API_KEY}`;
+  let res = await fetch(urlAdjusted, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Network error fetching data');
+  let data = await res.json();
+  if (data.Note) {
+    throw new Error('Rate limit reached. Please wait a minute and try again.');
+  }
+  if (!data['Error Message']) {
+    const parsed = parseDailySeries(data);
+    if (parsed) return parsed;
+  }
+
+  // Fallback: non-adjusted endpoint
+  const urlDaily = `${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${API_KEY}`;
+  res = await fetch(urlDaily, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Network error fetching data');
+  data = await res.json();
+  if (data.Note) {
+    throw new Error('Rate limit reached. Please wait a minute and try again.');
+  }
+  if (!data['Error Message']) {
+    const parsed = parseDailySeries(data);
+    if (parsed) return parsed;
+  }
+
+  // As a last step, validate symbol existence via search to provide better error
+  const suggestions = await symbolSearch(symbol);
+  const exact = suggestions.find(s => s.symbol.toUpperCase() === symbol.toUpperCase());
+  if (!exact) {
+    const top = suggestions.slice(0, 3).map(s => s.symbol).join(', ');
+    if (top.length > 0) {
+      throw new Error(`Ticker not found. Did you mean: ${top}?`);
+    }
+    throw new Error('Invalid ticker symbol. Please try another.');
+  }
+
+  throw new Error('Data not available for this ticker. It may be delisted or unsupported.');
 }
 
 function pickRandomStartIndex(datesAsc) {
@@ -189,7 +233,7 @@ async function startGame(symbolRaw) {
 
     const startIndex = pickRandomStartIndex(datesAsc);
     if (startIndex === null) {
-      throw new Error('Not enough recent data to start a game (7-100 days window).');
+      throw new Error('Not enough recent data (7–100 days window) for this ticker. Try another.');
     }
 
     gameState.symbol = symbol;
