@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Prediction Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-TsFSaSK9b1pEC+7iMoU6rJkrFXMPCwQ1l4q3tD38iKk=" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <header class="container">
+      <h1>Stock Market Prediction Game</h1>
+      <p class="subtitle">Guess whether tomorrow's close will go up or down.</p>
+    </header>
+
+    <main class="container">
+      <section class="card" id="setup-section">
+        <h2>Choose a Stock</h2>
+        <form id="ticker-form">
+          <label for="ticker-input">Ticker symbol</label>
+          <div class="row">
+            <input id="ticker-input" name="ticker" type="text" placeholder="e.g., MSFT, COF" autocomplete="off" required />
+            <button id="start-btn" type="submit">Start Game</button>
+          </div>
+          <p class="hint">Uses live data from Alpha Vantage (free tier limits apply).</p>
+          <p id="form-error" class="error" role="alert" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="card hidden" id="game-section">
+        <div class="game-header">
+          <div>
+            <h2 id="game-title">Ticker: <span id="active-ticker"></span></h2>
+            <p id="date-line">Current date: <span id="current-date"></span></p>
+          </div>
+          <div class="score">
+            Score: <span id="score">0</span>
+          </div>
+        </div>
+
+        <canvas id="price-chart" height="110"></canvas>
+
+        <div class="controls">
+          <button id="btn-up" class="primary">Predict Up</button>
+          <button id="btn-down" class="secondary">Predict Down</button>
+          <button id="btn-end" class="link">End Game</button>
+        </div>
+
+        <p id="feedback" class="feedback" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <footer class="container muted">
+      <p>
+        Data provided by <a href="https://www.alphavantage.co/" target="_blank" rel="noreferrer">Alpha Vantage</a>.
+      </p>
+    </footer>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>
+
